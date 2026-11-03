@@ -1,0 +1,31 @@
+name: update-data
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install openpyxl pandas google-api-python-client google-auth cryptography
+      - name: Download Excel from Drive
+        env:
+          GDRIVE_KEY: ${{ secrets.GDRIVE_KEY }}
+          GDRIVE_FILE_ID: ${{ secrets.GDRIVE_FILE_ID }}
+        run: python fetch_from_drive.py book.xlsx
+      - name: Convert
+        env:
+          DASH_PASSWORD: ${{ secrets.DASH_PASSWORD }}
+          PARTNERS_PASSWORD: ${{ secrets.PARTNERS_PASSWORD }}
+        run: python -W ignore convert.py book.xlsx data.json
+      - name: Commit if changed
+        run: |
+          git config user.name "bot"; git config user.email "bot@users.noreply.github.com"
+          git rm -q --cached --ignore-unmatch data.json
+          git add data.enc.json
+          git diff --cached --quiet || (git commit -m "auto update data" && git push)
