@@ -308,21 +308,22 @@ function renderPartners(V){
   let h=`<div class="toolbar"><div class="pills">`+Object.keys(names).map(k=>`<button class="pill${ptab===k?" on":""}" data-p="${k}">${names[k]}</button>`).join("")+`</div></div>`;
   const all=E.flatMap(s=>s.items.map(i=>({...i,n:s.n,m:s.m})));
   const totPaid=sum(E,s=>s.paid);
+  const fmtU=n=>"$"+fmt(n),totUsd=sum(all,i=>i.usd||0),hasUsd=totUsd>0;
   const stmtLbl=s=>"كشف "+s.n+" – "+mname(s.m);
   if(ptab==="sum"){
     let cum=0;const rows=E.map(s=>{cum+=s.paid;return {s,cum}});
     const big=all.slice().sort((a,b)=>b.paid-a.paid)[0];
-    h+=kpis([["إجمالي المصروفات المسددة (كل الكشوف)",fmt(totPaid)+" ج.م"],["عدد الكشوف",fmt(E.length)],["متوسط الكشف",fmt(E.length?totPaid/E.length:0)+" ج.م"],["أكبر بند",big?fmt(big.paid)+" ج.م":"-"]])+
+    h+=kpis([["إجمالي المصروفات المسددة (كل الكشوف)",fmt(totPaid)+" ج.م"],["عدد الكشوف",fmt(E.length)],["متوسط الكشف",fmt(E.length?totPaid/E.length:0)+" ج.م"],["أكبر بند",big?fmt(big.paid)+" ج.م":"-"]].concat(hasUsd?[["إجمالي الدولارات المشتراة (قسط الأرض)",fmtU(totUsd)]]:[]))+
      `<div class="grid"><div class="card"><h3>المصروفات المسددة لكل كشف (اضغط على عمود لعرض تفاصيله)</h3><div class="cv"><canvas id="p1"></canvas></div></div>
       <div class="card"><h3>حسب التصنيف</h3><div class="cv"><canvas id="p2"></canvas></div></div></div>
-      <div class="card"><h3>ملخص الكشوف</h3>${table([["الكشف",r=>"كشف رقم "+r.s.n],["الفترة",r=>mname(r.s.m)],["عدد البنود",r=>r.s.items.length,"n"],["المسدد",r=>fmt(r.s.paid),"n"],["% من الإجمالي",r=>(totPaid?r.s.paid/totPaid*100:0).toFixed(1)+"%","n"],["التراكمي",r=>fmt(r.cum),"n"]],rows)}
+      <div class="card"><h3>ملخص الكشوف</h3>${table([["الكشف",r=>"كشف رقم "+r.s.n],["الفترة",r=>mname(r.s.m)],["عدد البنود",r=>r.s.items.length,"n"],["المسدد",r=>fmt(r.s.paid),"n"],["% من الإجمالي",r=>(totPaid?r.s.paid/totPaid*100:0).toFixed(1)+"%","n"],["التراكمي",r=>fmt(r.cum),"n"]].concat(hasUsd?[["دولار مشترى",r=>r.s.usd?fmtU(r.s.usd):"-","n"]]:[]),rows)}
       <p class="note">كشف أكتوبر لسه فاضي فمش ظاهر. الأرقام من شيت «كشوف مصروفات» (عمود المسدد).</p></div>`;
   }
   if(ptab==="det"){
     const cur=pstmt==="all"?all:all.filter(i=>String(i.n)===pstmt);
     h+=`<div class="bar"><label for="ps">الكشف:</label><select id="ps"><option value="all">كل الكشوف</option>`+E.map(s=>`<option value="${s.n}"${pstmt===String(s.n)?" selected":""}>${stmtLbl(s)}</option>`).join("")+`</select></div>`+
-      kpis([["المسدد",fmt(sum(cur,i=>i.paid))+" ج.م"],["عدد البنود",fmt(cur.length)],["أكبر بند",fmt(Math.max(0,...cur.map(i=>i.paid)))+" ج.م"]])+
-      `<div class="card"><h3>بنود الكشوف</h3>${table([["الكشف",r=>r.n],["الشهر",r=>mname(r.m)],["البيان",r=>esc(r.name)],["التصنيف",r=>r.cat],["الإجمالي",r=>r.total?fmt(r.total):"-","n"],["المسدد",r=>fmt(r.paid),"n"],["المتبقي",r=>r.rem?fmt(r.rem):"-","n"]],cur)}
+      kpis([["المسدد",fmt(sum(cur,i=>i.paid))+" ج.م"],["عدد البنود",fmt(cur.length)],["أكبر بند",fmt(Math.max(0,...cur.map(i=>i.paid)))+" ج.م"]].concat(sum(cur,i=>i.usd||0)?[["الدولارات المشتراة",fmtU(sum(cur,i=>i.usd||0))]]:[]))+
+      `<div class="card"><h3>بنود الكشوف</h3>${table([["الكشف",r=>r.n],["الشهر",r=>mname(r.m)],["البيان",r=>esc(r.name)],["التصنيف",r=>r.cat],["الإجمالي",r=>r.total?fmt(r.total):"-","n"],["المسدد",r=>fmt(r.paid),"n"],["المتبقي",r=>r.rem?fmt(r.rem):"-","n"]].concat(hasUsd?[["بالدولار",r=>r.usd?fmtU(r.usd):"-","n"],["سعر الدولار",r=>r.rate?r.rate:"-","n"]]:[]),cur)}
       <p class="note">«الإجمالي» و«المتبقي» بيتسجلوا للبنود المتفق عليها بس (زي الاستشاريين)، وباقي البنود بتتسجل بالمسدد فقط. المتبقي بيتنقل من كشف للتاني (زي المهندس الاستشاري) فمش بنجمعه عشان ما يتكررش.</p></div>`;
   }
   if(ptab==="ana"){
@@ -333,6 +334,9 @@ function renderPartners(V){
       <div class="card"><h3>التصنيف × الكشف</h3><div class="scroll"><table><thead><tr><th>التصنيف</th>`+E.map(s=>`<th class="n">كشف ${s.n}</th>`).join("")+`<th class="n">الإجمالي</th><th class="n">%</th></tr></thead><tbody>`+
       cats.map(([c,v])=>`<tr><td>${esc(c)}</td>`+E.map(s=>{const x=sum(s.items.filter(i=>i.cat===c),i=>i.paid);return `<td class="n">${x?fmt(x):"-"}</td>`}).join("")+`<td class="n">${fmt(v)}</td><td class="n">${(totPaid?v/totPaid*100:0).toFixed(1)}%</td></tr>`).join("")+
       `<tr class="tot"><td>الإجمالي</td>`+E.map(s=>`<td class="n">${fmt(s.paid)}</td>`).join("")+`<td class="n">${fmt(totPaid)}</td><td class="n">100%</td></tr></tbody></table></div></div>
+      ${hasUsd?(()=>{let cu=0;const L=E.map(s=>{const it=s.items.filter(i=>i.cat==="شراء قسط الأرض"&&i.usd);const u=sum(it,i=>i.usd),e=sum(it,i=>i.paid);return {s,u,e}}).filter(r=>r.u).map(r=>{cu+=r.u;return {...r,cu}});
+        const te=sum(L,r=>r.e);
+        return `<div class="card" style="margin-top:12px"><h3>شراء قسط الأرض بالدولار (قيمته بالجنيه + تجميع الدولارات)</h3>`+table([["الكشف",r=>r.tot?"الإجمالي":"كشف رقم "+r.s.n],["الشهر",r=>r.tot?"":mname(r.s.m)],["القيمة بالجنيه",r=>fmt(r.e),"n"],["بالدولار",r=>fmtU(r.u),"n"],["متوسط سعر الدولار",r=>(r.e/r.u).toFixed(2),"n"],["تجميعي الدولار",r=>r.tot?"":fmtU(r.cu),"n"]],L.concat([{tot:1,e:te,u:totUsd}]),r=>r.tot?"tot":"")+`<p class="note">الدولار من عمود «ملاحظات» في كشف المصروفات، والسعر المعروض هنا = القيمة بالجنيه ÷ الدولارات (قبل العمولة).</p></div>`})():""}
       <div class="card" style="margin-top:12px"><h3>أكبر 10 بنود</h3>${table([["البيان",r=>esc(r.name)],["الكشف",r=>r.n],["التصنيف",r=>r.cat],["المسدد",r=>fmt(r.paid),"n"]],all.slice().sort((a,b)=>b.paid-a.paid).slice(0,10))}
       <p class="note">التصنيف تلقائي حسب كلمات في البيان، وتقدر تعدّل الكلمات من ملف convert (partners.py).</p></div>`;
   }

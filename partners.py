@@ -28,10 +28,25 @@ def _date(s):
     m = re.search(r"(\d{1,2})\s*/\s*(\d{1,2})\s*/\s*(\d{4})", s or "")
     return (int(m.group(3)), int(m.group(2))) if m else None
 
+def _usd_note(f, g):
+    """ملاحظات البند: مبلغ بالدولار (مثل 250,000$) وسعر (مثل «بالعموله 52.38»). يرجّع (دولار، سعر)."""
+    def num(s): return float(s.replace(",", ""))
+    usd = rate = None
+    for v in (f, g):
+        if isinstance(v, str):
+            t = v.replace("٬", ",")
+            m = re.search(r"\$\s*([\d][\d,]*\.?\d*)|([\d][\d,]*\.?\d*)\s*(?:\$|دولار|usd)", t, re.I)
+            if m and usd is None: usd = num(m.group(1) or m.group(2)); continue
+            m = re.search(r"(\d+(?:\.\d+)?)", t)
+            if m and rate is None and ("عمول" in t or "سعر" in t or usd is not None): rate = float(m.group(1))
+        elif isinstance(v, NUM) and not isinstance(v, bool) and v and f is v and usd is None and isinstance(g, str) and ("عمول" in g or "سعر" in g):
+            usd = float(v)           # خلية الملاحظات رقم صافي بتنسيق $
+    return usd, rate
+
 def parse_expenses(ws):
     stmts, cur = [], None
-    for row in ws.iter_rows(values_only=True, max_col=5):
-        a, b, c, d, e = (list(row) + [None] * 5)[:5]
+    for row in ws.iter_rows(values_only=True, max_col=8):
+        a, b, c, d, e, f, g = (list(row) + [None] * 8)[:7]
         if isinstance(b, str) and "المصروفات كشف رقم" in b:
             n = int(re.search(r"\(\s*(\d+)\s*\)", b).group(1))
             ds = re.findall(r"\d{1,2}\s*/\s*\d{1,2}\s*/\s*\d{4}", b)
@@ -44,9 +59,14 @@ def parse_expenses(ws):
         if isinstance(a, NUM) and _txt(b):
             if not any(isinstance(x, NUM) and x for x in (c, d, e)): continue
             name = _txt(b)
-            cur["items"].append(dict(i=int(a), name=name, total=float(c or 0), paid=float(d or 0), rem=float(e or 0), cat=categorize(name)))
+            it = dict(i=int(a), name=name, total=float(c or 0), paid=float(d or 0), rem=float(e or 0), cat=categorize(name))
+            usd, rate = _usd_note(f, g)
+            if usd: it["usd"] = usd
+            if usd and rate: it["rate"] = rate
+            cur["items"].append(it)
     for s in stmts:
         s["paid"] = sum(i["paid"] for i in s["items"])
+        s["usd"] = sum(i.get("usd", 0) for i in s["items"])
         s["check"] = abs(s["paid"] - float(s["total"]["paid"] or 0)) < 1
     return stmts
 
