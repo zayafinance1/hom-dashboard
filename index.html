@@ -68,7 +68,11 @@ table.st td.sb{font-weight:700}
 table.st tr.tot td{background:rgba(232,178,11,.18);font-weight:700;border-bottom:1px solid var(--line)}
 table.st td.em{border-color:transparent}
 table.st tr.bl td{font-weight:700;border-bottom:0}
-.toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+input[type=search]{font:inherit;padding:7px 12px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px}
+.toolbar{margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+
+.rs{white-space:normal!important;min-width:240px;max-width:420px;line-height:1.5}
+.sm{white-space:normal!important;min-width:150px}
 </style>
 </head>
 <body>
@@ -81,6 +85,7 @@ table.st tr.bl td{font-weight:700;border-bottom:0}
   <button class="tab on" data-t="inst">الأقساط</button>
   <button class="tab" data-t="proj">المتحصل من المشروع</button>
   <button class="tab" data-t="rem">المتبقي</button>
+  <button class="tab" data-t="late">المتأخرات</button>
   <button class="tab" data-t="down">دفعات التعاقد</button>
   <button class="tab" data-t="sales">المبيعات</button>
   <button class="tab" data-t="partners">الشركاء</button>
@@ -161,14 +166,16 @@ function table(cols,rows,rowCls){
 }
 const byDate=(a,k)=>a.slice().sort((x,y)=>y[k].localeCompare(x[k]));
 
+
 function render(){
   charts.forEach(c=>c.destroy());charts=[];
   document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("on",b.dataset.t===tab));
   const V=document.getElementById("view");
   if(tab!=="partners")P=null;   // الشركاء يطلب كلمة السر كل مرة تدخل فيها التاب
   document.getElementById("yearBox").hidden=tab!=="rem";
-  document.getElementById("bar").hidden=(tab==="partners"||tab==="proj");
+  document.getElementById("bar").hidden=(tab==="partners"||tab==="proj"||tab==="late");
   if(tab==="proj"){document.getElementById("yearBox").hidden=true;renderProject(V);return;}
+  if(tab==="late"){document.getElementById("yearBox").hidden=true;renderLate(V);return;}
   if(tab==="partners"){renderPartners(V);return;}
 
   /* ---- قوائم الفلاتر ---- */
@@ -418,7 +425,51 @@ function renderPartners(V){
 
 /* =================== المتحصل من المشروع (أقساط + تعاقدات + جراج) وتاب الصيانة =================== */
 let jtab="all",jy="all",jm="all";
+let ltab="متأخرات",lmon="all",lkind="all",lview="grp",lq="";
 let jsel=null,jopen=false;
+
+/* =================== المتأخرات (حسب عمود "حالة القسط") =================== */
+function renderLate(V){
+  const ALL=D.late;
+  if(!ALL){V.innerHTML='<div class="card empty">بيانات المتأخرات غير متاحة بعد. شغّل التحديث (Run workflow) بعد رفع convert.py.</div>';return;}
+  const cnt=s=>ALL.filter(x=>x.s===s).length;
+  const mine=ALL.filter(x=>x.s===ltab);
+  const ms=[...new Set(mine.map(x=>x.m))].sort();
+  if(lmon!=="all"&&!ms.includes(lmon))lmon="all";
+  const kinds=[...new Set(mine.map(x=>x.k))].sort();
+  if(lkind!=="all"&&!kinds.includes(lkind))lkind="all";
+  const qq=lq.trim().toLowerCase();
+  const rows=(lmon==="all"?mine:mine.filter(x=>x.m===lmon)).filter(x=>lkind==="all"||x.k===lkind).filter(x=>!qq||[x.n,x.u,x.note,x.ph].join(" ").toLowerCase().includes(qq)).slice().sort((a,b)=>a.d.localeCompare(b.d)||a.u.localeCompare(b.u));
+  const days=d=>Math.max(0,Math.floor((NOW-new Date(d+"T00:00:00"))/864e5));
+  const late=ltab==="متأخرات",tot=sum(rows,x=>x.a),oldest=rows[0];
+  const title=lmon==="all"?"كل الشهور":mname(lmon);
+  const names={"متأخرات":"المتأخرات","حالي":"مستحق حاليًا (حالي)"};
+  let h="";
+  h+=`<div class="toolbar"><label>النوع: <select id="lkind"><option value="all">الكل</option>`+kinds.map(k=>`<option value="${esc(k)}"${k===lkind?" selected":""}>${esc(k)}</option>`).join("")+`</select></label>
+    <label>العرض: <select id="lview"><option value="grp"${lview==="grp"?" selected":""}>مجمع بالعميل والوحدة</option><option value="det"${lview==="det"?" selected":""}>تفصيلي (قسط قسط)</option></select></label>
+    <label>شهر الاستحقاق: <select id="lmon"><option value="all">كل الشهور</option>`+ms.map(m=>`<option value="${m}"${m===lmon?" selected":""}>${mname(m)}</option>`).join("")+`</select></label>
+    <label>بحث: <input id="lq" type="search" placeholder="اسم العميل أو الوحدة أو الملاحظات" value="${esc(lq)}" style="min-width:230px"></label></div>`;
+  h+=kpis([[(late?"إجمالي المتأخرات":"إجمالي المستحق حاليًا")+" – "+title,fmt(tot)+" ج.م"],["عدد الأقساط",fmt(rows.length)],["عدد العملاء/الوحدات المتأخرة",fmt(new Set(rows.map(x=>x.n+"|"+x.u)).size)],[late?"أقدم استحقاق (مدة التأخر)":"أقدم استحقاق",oldest?(oldest.d+(late?" ("+days(oldest.d)+" يوم)":"")):"-"]]);
+  if(!rows.length){V.innerHTML=h+'<div class="card empty">لا توجد أقساط في هذه الحالة</div>';bindLate(V);return;}
+
+  const cl={};rows.forEach(x=>{const k=x.n+"|"+x.u;(cl[k]=cl[k]||{n:x.n,u:x.u,c:0,a:0,d:x.d,notes:new Set()});cl[k].c++;cl[k].a+=x.a;if(x.d<cl[k].d)cl[k].d=x.d;if(x.note)cl[k].notes.add(x.note)});
+  const cls=Object.values(cl).sort((a,b)=>b.a-a.a);
+  if(lview==="grp") h+=`<div class="card"><h3>مجمع بالعميل والوحدة – ${title}</h3>`+table([["العميل",r=>esc(r.n),"sm"],["الوحدة",r=>esc(r.u)],["عدد الأقساط",r=>r.c,"n"],["الإجمالي المتبقي",r=>fmt(r.a),"n"],["أقدم استحقاق",r=>r.d],["أيام التأخر",r=>days(r.d),"n"],["سبب التأخر (الملاحظات)",r=>esc([...r.notes].join(" | ")||"-"),"rs"]],cls)+`</div>`;
+  else h+=`<div class="card"><h3>تفصيل الأقساط – ${title}</h3>`+table([
+    ["تاريخ الاستحقاق",r=>r.d],["الوحدة",r=>esc(r.u)],["العميل",r=>esc(r.n),"sm"],["الهاتف",r=>esc(r.ph||"-")],["نوع الدفعة",r=>esc(r.k)],["طريقة السداد",r=>esc(r.t)],
+    ["مكان الشيك",r=>esc(r.loc||"-"),"sm"],["القيمة",r=>fmt(r.v),"n"],["المتبقي",r=>fmt(r.a),"n"],["أيام التأخر",r=>days(r.d),"n"],
+    ["سبب التأخر (الملاحظات)",r=>esc(r.note||"-"),"rs"]],rows)+`</div>`;
+  V.innerHTML=h;
+  bindLate(V);
+}
+function bindLate(V){
+  V.querySelectorAll("[data-l]").forEach(b=>b.onclick=()=>{ltab=b.dataset.l;lmon="all";render()});
+  const s=V.querySelector("#lmon");if(s)s.onchange=()=>{lmon=s.value;render()};
+  const k=V.querySelector("#lkind");if(k)k.onchange=()=>{lkind=k.value;render()};
+  const w=V.querySelector("#lview");if(w)w.onchange=()=>{lview=w.value;render()};
+  const q=V.querySelector("#lq");if(q)q.oninput=()=>{lq=q.value;const p=q.selectionStart;render();const n=document.getElementById("lq");if(n){n.focus();n.setSelectionRange(p,p)}};
+}
+
 function renderProject(V){
   const mk=(a,type)=>a.map(x=>({m:x.m,date:x.date,unit:x.unit||"-",type,bank:x.bank||"-",method:x.method||"-",a:x.amount}));
   const main=[...mk(D.installments.filter(x=>x.kind==="قسط"||x.kind==="قسط0"),"قسط"),...mk(D.downs,"تعاقد"),...mk(D.installments.filter(x=>x.kind==="جراج"),"جراج")];
