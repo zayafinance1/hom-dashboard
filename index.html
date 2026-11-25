@@ -32,6 +32,9 @@ table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:ta
 th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line)}
 th{color:var(--mute);font-weight:600;font-size:13px;position:sticky;top:0;background:var(--card)}
 td.n,th.n{text-align:left}
+.nw{white-space:nowrap}
+.lt th.rs,.lt td.rs{width:99%;max-width:none!important}
+.lt th.sm,.lt td.sm{min-width:200px;max-width:260px;width:1%}
 tr.late td{color:var(--late)}
 .scroll{max-height:380px;overflow:auto}
 .empty{color:var(--mute);padding:20px;text-align:center}
@@ -454,9 +457,9 @@ function renderLate(V){
 
   const cl={};rows.forEach(x=>{const k=x.n+"|"+x.u;(cl[k]=cl[k]||{n:x.n,u:x.u,c:0,a:0,d:x.d,notes:new Set()});cl[k].c++;cl[k].a+=x.a;if(x.d<cl[k].d)cl[k].d=x.d;if(x.note)cl[k].notes.add(x.note)});
   const cls=Object.values(cl).sort((a,b)=>b.a-a.a);
-  if(lview==="grp") h+=`<div class="card"><h3>مجمع بالعميل والوحدة – ${title}</h3>`+table([["العميل",r=>esc(r.n),"sm"],["الوحدة",r=>esc(r.u)],["عدد الأقساط",r=>r.c,"n"],["الإجمالي المتبقي",r=>fmt(r.a),"n"],["أقدم استحقاق",r=>r.d],["أيام التأخر",r=>days(r.d),"n"],["سبب التأخر (الملاحظات)",r=>esc([...r.notes].join(" | ")||"-"),"rs"]],cls)+`</div>`;
-  else h+=`<div class="card"><h3>تفصيل الأقساط – ${title}</h3>`+table([
-    ["تاريخ الاستحقاق",r=>r.d],["الوحدة",r=>esc(r.u)],["العميل",r=>esc(r.n),"sm"],["الهاتف",r=>esc(r.ph||"-")],["نوع الدفعة",r=>esc(r.k)],["طريقة السداد",r=>esc(r.t)],
+  if(lview==="grp") h+=`<div class="card lt"><h3>مجمع بالعميل والوحدة – ${title}</h3>`+table([["العميل",r=>esc(r.n),"sm"],["الوحدة",r=>esc(r.u),"nw"],["عدد الأقساط",r=>r.c,"n"],["الإجمالي المتبقي",r=>fmt(r.a),"n"],["أقدم استحقاق",r=>r.d,"nw"],["أيام التأخر",r=>days(r.d),"n"],["سبب التأخر (الملاحظات)",r=>esc([...r.notes].join(" | ")||"-"),"rs"]],cls)+`</div>`;
+  else h+=`<div class="card lt"><h3>تفصيل الأقساط – ${title}</h3>`+table([
+    ["تاريخ الاستحقاق",r=>r.d,"nw"],["الوحدة",r=>esc(r.u),"nw"],["العميل",r=>esc(r.n),"sm"],["الهاتف",r=>esc(r.ph||"-")],["نوع الدفعة",r=>esc(r.k)],["طريقة السداد",r=>esc(r.t)],
     ["مكان الشيك",r=>esc(r.loc||"-"),"sm"],["القيمة",r=>fmt(r.v),"n"],["المتبقي",r=>fmt(r.a),"n"],["أيام التأخر",r=>days(r.d),"n"],
     ["سبب التأخر (الملاحظات)",r=>esc(r.note||"-"),"rs"]],rows)+`</div>`;
   V.innerHTML=h;
