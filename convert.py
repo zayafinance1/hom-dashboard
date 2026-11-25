@@ -80,8 +80,23 @@ downs = [dict(p=r["project"], m=r["m"], date=r["تاريخ السداد"].strfti
          for _, r in c.iterrows()]
 pend = df[(df["نوع الدفعة"] == "مقدم تعاقد") & (df["المتبقى"] > 0)]["المتبقى"].sum()
 
+# ---- 4) المتأخرات والحالي (حسب عمود "حالة القسط" AK: متأخرات / حالي) + الملاحظات = سبب التأخر
+def _s(v):
+    if v is None or pd.isna(v): return ""
+    if isinstance(v, float) and v == int(v): return str(int(v))
+    return str(v).strip()
+def _n(v): return 0.0 if v is None or pd.isna(v) else round(float(v), 2)
+lt = df[df["حالة القسط"].astype(str).str.strip().isin(["متأخرات", "حالي"]) & df["نوع الدفعة"].isin(inst_types)
+        & (df["المتبقى"] > 0) & df["تاريخ الشيك"].notna()].copy()
+late = [dict(s=_s(r["حالة القسط"]), m=r["تاريخ الشيك"].strftime("%Y-%m"), d=r["تاريخ الشيك"].strftime("%Y-%m-%d"),
+             u=_s(r["عمارة شقة"]) or "-", n=_s(r["اسم العميل"]) or "-", ph=_s(r["رقم تلفون العميل"]), k=_s(r["نوع الدفعة"]),
+             t=_s(r["نوع السداد"]) or "-", bk=_s(r["البنك المسحوب عليه"]), cn=_s(r["رقم الشيك"]), loc=_s(r["مكان الشيك"]),
+             v=_n(r["القيمة"]), p=_n(r["المحصل"]), a=_n(r["المتبقى"]), note=_s(r["الملاحظات"]))
+        for _, r in lt.iterrows()]
+print("متأخرات/حالي:", len(late))
+
 json.dump(dict(updated=(open("modified.txt").read().strip() if os.path.exists("modified.txt") else dt.datetime.fromtimestamp(os.path.getmtime(src)).strftime("%Y-%m-%d %H:%M")), installments=installments, rem=rem,
-               sales=sales, downs=downs, downs_pending=float(pend)),
+               sales=sales, downs=downs, downs_pending=float(pend), late=late),
           open(out, "w", encoding="utf-8"), ensure_ascii=False)
 print("OK", len(installments), len(sales), len(downs), "->", out)
 
